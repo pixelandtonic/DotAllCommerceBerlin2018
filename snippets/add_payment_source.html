@@ -1,0 +1,19 @@
+<form method="POST" class="form-horizontal paymentSource-form max-w-md" id="gateway-{{ gateway.id }}">
+    <input type="hidden" name="action" value="commerce/payment-sources/add"/>
+    <input type="hidden" name="gatewayId" value="{{ gateway.id }}"/>
+    <input type="hidden" name="cancelUrl" value="{{ '/shop/customer/cards'|hash }}"/>
+    {{ redirectInput('/shop/customer/cards') }}
+    {{ csrfInput() }}
+
+    {{ gateway.getPaymentFormHtml({})|raw }}
+
+    <div class="field" data-colspan="1">
+        <input class="text description w-full" type="text"
+               name="description" value="" maxlength="70"
+               autocomplete="off" placeholder="Card description">
+    </div>
+
+    <div class="buttons">
+        <button class="button button-primary" type="submit">Add card</button>
+    </div>
+</form>

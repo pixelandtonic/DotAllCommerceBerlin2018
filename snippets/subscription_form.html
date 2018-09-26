@@ -1,0 +1,28 @@
+<form method="POST">
+    <input type="hidden" name="action" value="commerce/subscriptions/subscribe">
+    <input type="hidden" name="planId" value="{{ plan.id|hash }}">
+    {{ redirectInput('shop/services') }}
+    {{ csrfInput() }}
+
+    <h4>{{ plan.name }}</h4>
+
+    <select name="trialDays" data-plan="{{ plan.id }}">
+        {% for i in [0, 3, 7, 14] %}
+            {% if i == 0 %}
+                <option value="{{ (plan.uid~':0')|hash}}">No trial period.</option>
+            {% else %}
+                <option value="{{ (plan.uid~':'~i)|hash  }}">Trial for {{ i }} days</option>
+            {% endif %}
+        {% endfor %}
+    </select>
+
+    {% set paymentSources = craft.commerce.getPaymentSources().getAllGatewayPaymentSourcesByUserId(plan.gateway.id, currentUser.id ?? null) %}
+
+    {% if not paymentSources|length %}
+    <div class="paymentForm">
+        {{ plan.gateway.getPaymentFormHtml({})|raw }}
+    </div>
+    {% endif %}
+
+    <button type="submit">{{ "Subscribe"|t }}</button>
+</form>

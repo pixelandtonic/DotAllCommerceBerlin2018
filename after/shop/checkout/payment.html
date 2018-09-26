@@ -1,0 +1,130 @@
+{% extends 'shop/_layouts/checkout' %}
+
+{% block content %}
+
+    {% if not cart.shippingAddress %}
+        {% redirect 'shop/checkout/addresses' %}
+    {% endif %}
+
+    <div class="flex -mx-8">
+        <div class="w-2/3 px-8">
+            <h1>Payment</h1>
+            {#
+            Using the update cart action you could allow the user to select the payment method here.
+            We recommend using ajax to set this, so no page refresh is needed. This would also allow you to dynamically show or hide the credit card form
+            on method change.
+            #}
+
+            {% set storedCards = craft.commerce.paymentSources.allPaymentSourcesByUserId(currentUser.id ?? null) %}
+
+            {% if not craft.commerce.gateways.allCustomerEnabledGateways|length %}
+                <p>No payment methods available.</p>
+            {% endif %}
+
+            {% if craft.commerce.gateways.allCustomerEnabledGateways|length %}
+                <form method="POST" id="gateway" class="form-inline">
+
+                    <input type="hidden" name="action" value="commerce/cart/update-cart">
+                    {{ redirectInput('shop/checkout/payment') }}
+                    {{ csrfInput() }}
+
+                    <label for="gatewayId">Select a payment method:</label>
+                    <select id="paymentMethod" name="paymentMethod" class="form-control">
+                        {% if not cart.gatewayId and not cart.paymentSourceId %}<option value="">---</option>{% endif %}
+
+                        {% for storedCard in storedCards %}
+                            <option value="card:{{ storedCard.id }}" {% if storedCard.id == cart.paymentSourceId %}selected{% endif %}>{{ storedCard.description }}</option>
+                        {% endfor %}
+                        <option value="">---</option>
+                        {% for id,name in craft.commerce.gateways.allCustomerEnabledGateways %}
+                            <option value="gateway:{{ id }}" {% if id == cart.gatewayId %}selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+
+                    {% set currencies = craft.commerce.paymentCurrencies.allPaymentCurrencies %}
+                    {% if currencies|length > 1 %}
+                        <select id="paymentCurrency" name="paymentCurrency"
+                                class="form-control">
+                            {% for currency in currencies %}
+                                <option value="{{ currency.iso }}" {% if currency.iso == cart.paymentCurrency %}selected{% endif %}>{{ currency.name }} {{  currency.iso }} - {{ cart.totalPrice|commerceCurrency(currency.iso,convert=true) }}</option>
+                            {% endfor %}
+                        </select>
+                    {% endif %}
+                </form>
+            {% endif %}
+
+            {% if cart.gatewayId or cart.paymentSourceId %}
+                <form method="POST" class="form-horizontal paymentSource-form max-w-md" id="paymentForm">
+                    <input type="hidden" name="action" value="commerce/payments/pay"/>
+                    {{ redirectInput('/shop/customer/order?number='~cart.number) }}
+                    <input type="hidden" name="cancelUrl" value="{{ '/shop/checkout/payment'|hash }}"/>
+                    <input type="hidden" name="orderEmail" value="{{ cart.email }}"/>
+
+                    {{ csrfInput() }}
+
+                    <fieldset>
+                        {% if cart.gatewayId %}
+                            <input type="hidden" name="gatewayId" value="{{ cart.gatewayId }}"/>
+                            {{ cart.gateway.getPaymentFormHtml({})|raw }}
+
+                            {% if cart.gateway.supportsPaymentSources() %}
+                                <div class="checkbox">
+                                    <label><input type="checkbox" name="savePaymentSource" value="1" /> {{ "Save card for future purchases"|t }}</label>
+                                </div><br />
+                            {% endif %}
+
+                        {% else %}
+                            {{ cart.gateway.getPaymentConfirmationFormHtml({})|raw }}
+                        {% endif %}
+
+                        <button class="button button-primary" type="submit">Pay {{ cart.totalPrice|commerceCurrency(cart.paymentCurrency,convert=true) }}</button>
+                    </fieldset>
+                </form>
+            {% endif %}
+        </div>
+
+        <div class="w-1/3 px-8 border-l border-grey-lighter">
+            {% include "shop/_includes/order-review" with { showShippingAddress: true, showShippingMethod: true } %}
+        </div>
+    </div>
+
+    {% js %}
+        $('#paymentCurrency').change(function(){
+            $('form#gateway').submit();
+        });
+
+        $('#paymentMethod').change(function(ev){
+            $select = $(ev.currentTarget);
+
+            if ($select.val().length === 0) {
+                return;
+            }
+
+            var parts = $select.val().split(':');
+
+            var name = 'gatewayId';
+
+            if (parts[0] === 'card') {
+                name = 'paymentSourceId';
+            }
+
+            $select.prop('disabled', 'disabled');
+
+            $('form#gateway').append('<input type="hidden" name="' + name + '" value="' + parts[1] + '" />').submit();
+        });
+    {% endjs %}
+
+    {% js %}
+        $('#paymentForm').on('submit', function (ev) {
+            $form = $(this);
+
+            if ($form.data('processing')) {
+                ev.preventDefault();
+
+                return false;
+            }
+
+            $form.data('processing', true);
+        });
+    {% endjs %}
+{% endblock %}
